@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cloud Dashboard</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f7f6; padding: 40px; }
+    .container { max-width: 600px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    
+    /* Search Bar */
+    .search-box { display: flex; gap: 10px; margin-bottom: 20px; }
+    input[type="text"] { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+    button { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; color: white; background: #007bff; }
+    button:hover { background: #0056b3; }
+    .btn-green { background: #28a745; }
+    .btn-green:hover { background: #218838; }
+    .btn-outline { background: white; color: #007bff; border: 1px solid #007bff; }
+    .btn-outline:hover { background: #f8f9fa; }
+
+    /* User Profile */
+    #userProfile { display: none; padding: 20px; border: 1px solid #eee; border-radius: 6px; background: #fafafa; }
+    .badge-row { display: flex; align-items: center; justify-content: space-between; margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd; }
+    
+    /* Modal Popup */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
+    .modal-content { background: white; padding: 30px; border-radius: 8px; width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .modal-header h3 { margin: 0; }
+    .close-btn { background: none; color: #aaa; font-size: 20px; cursor: pointer; padding: 0; }
+    .close-btn:hover { color: #333; background: none; }
+    
+    .badge-input-group { display: flex; gap: 10px; margin-top: 15px; }
+    #downloadSection { margin-top: 25px; padding: 15px; background: #fff3cd; border: 1px solid #ffeeba; border-radius: 4px; font-size: 13px; text-align: center; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>User Directory</h2>
+  
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="Enter username (e.g., jdoe)">
+    <button onclick="searchUser()">Search</button>
+  </div>
+
+  <div id="userProfile">
+    <h3 style="margin-top: 0;">User Information</h3>
+    <p><strong>Username:</strong> <span id="outUser"></span></p>
+    <p><strong>First Name:</strong> <span id="outFirst"></span></p>
+    <p><strong>Last Name:</strong> <span id="outLast"></span></p>
+    
+    <div class="badge-row">
+      <div><strong>Current Badge ID:</strong> <span id="outBadge" style="font-family: monospace; font-size: 16px; color: #d35400;"></span></div>
+      <button class="btn-green" onclick="openModal()">+ Add New Badge</button>
+    </div>
+  </div>
+</div>
+
+<div id="badgeModal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Assign New Badge</h3>
+      <button class="close-btn" onclick="closeModal()">&times;</button>
+    </div>
+
+    <label style="font-size: 13px; color: #666; font-weight: bold;">NEW BADGE ID</label>
+    <div class="badge-input-group">
+      <input type="text" id="newBadgeId" placeholder="Waiting for scan...">
+      <button onclick="fetchFromProxy()" id="fetchBtn">Fetch from Hardware</button>
+    </div>
+
+    <div id="downloadSection">
+      <p style="margin-top: 0; color: #856404;"><strong>Hardware Connector Required</strong><br>If you haven't already, please download and run the background connector to read physical cards.</p>
+      <a id="downloadLink" href="#" style="text-decoration: none;">
+        <button class="btn-outline" id="downloadBtn" style="width: 100%;">Download Connector</button>
+      </a>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // --- 1. User Search Logic ---
+  async function searchUser() {
+    const username = document.getElementById("searchInput").value.trim();
+    if (!username) return;
+
+    try {
+      const res = await fetch(`/api/users/${username}`);
+      const data = await res.json();
+
+      if (data.success) {
+        document.getElementById("outUser").innerText = data.user.username;
+        document.getElementById("outFirst").innerText = data.user.firstName;
+        document.getElementById("outLast").innerText = data.user.lastName;
+        document.getElementById("outBadge").innerText = data.user.badgeId;
+        document.getElementById("userProfile").style.display = "block";
+      } else {
+        alert(data.message);
+        document.getElementById("userProfile").style.display = "none";
+      }
+    } catch (err) {
+      alert("Failed to connect to server.");
+    }
+  }
+
+  // --- 2. Modal & OS Detection Logic ---
+  function openModal() {
+    document.getElementById("badgeModal").style.display = "flex";
+    document.getElementById("newBadgeId").value = ""; // clear previous
+    
+    // Detect OS to serve the correct download file
+    const userAgent = window.navigator.userAgent;
+    const downloadLink = document.getElementById("downloadLink");
+    const downloadBtn = document.getElementById("downloadBtn");
+
+    if (userAgent.indexOf("Mac") !== -1) {
+      downloadLink.href = "/downloads/HardwareConnector-Mac.zip";
+      downloadBtn.innerText = "Download for macOS";
+    } else {
+      downloadLink.href = "/downloads/hardware-connector-win.exe";
+      downloadBtn.innerText = "Download for Windows (.exe)";
+    }
+  }
+
+  function closeModal() {
+    document.getElementById("badgeModal").style.display = "none";
+  }
+
+  // --- 3. Hardware Proxy Fetch Logic ---
+  async function fetchFromProxy() {
+    const fetchBtn = document.getElementById("fetchBtn");
+    fetchBtn.disabled = true;
+    fetchBtn.innerText = "Scanning...";
+    document.getElementById("newBadgeId").value = "Please tap card on reader...";
+
+    try {
+      // Send request to the Local Proxy running on the user's machine
+      const res = await fetch("http://127.0.0.1:3030/api/credential", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          host: "amz.local", // The proxy will forward the request to this hardware IP
+          timeout: 5000, 
+          mode: "http" 
+        })
+      });
+
+      const proxyResponse = await res.json();
+
+      if (res.ok) {
+        // Parse the exact cardNumber field from the payload structure you provided
+        const cardNumber = proxyResponse.data?.card?.apps?.[0]?.cardNumber;
+        
+        if (cardNumber) {
+          document.getElementById("newBadgeId").value = cardNumber;
+          fetchBtn.innerText = "✓ Success";
+        } else {
+          document.getElementById("newBadgeId").value = "Error: Card empty/invalid";
+          fetchBtn.innerText = "Try Again";
+        }
+      } else {
+        document.getElementById("newBadgeId").value = "";
+        alert("Reader Error: " + (proxyResponse.error || "Unknown error"));
+        fetchBtn.innerText = "Fetch from Hardware";
+      }
+    } catch (err) {
+      document.getElementById("newBadgeId").value = "";
+      alert("Could not reach local connector! Is the app running in the background?");
+      fetchBtn.innerText = "Fetch from Hardware";
+    } finally {
+      setTimeout(() => {
+        fetchBtn.disabled = false;
+        if(fetchBtn.innerText === "✓ Success") fetchBtn.innerText = "Fetch from Hardware";
+      }, 2000);
+    }
+  }
+</script>
+
+</body>
+</html>
