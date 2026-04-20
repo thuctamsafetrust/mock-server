@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cloud Dashboard</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f7f6; padding: 40px; }
+    .container { max-width: 600px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .search-box { display: flex; gap: 10px; margin-bottom: 20px; }
+    input[type="text"], select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; box-sizing: border-box; }
+    button { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; color: white; background: #007bff; }
+    button:hover { background: #0056b3; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .btn-green { background: #28a745; }
+    .btn-green:hover { background: #218838; }
+    
+    #userProfile { display: none; padding: 20px; border: 1px solid #eee; border-radius: 6px; background: #fafafa; }
+    .badge-row { display: flex; align-items: center; justify-content: space-between; margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd; }
+    
+    /* Modal Styles */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
+    .modal-content { background: white; padding: 30px; border-radius: 8px; width: 450px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .modal-header h3 { margin: 0; }
+    .close-btn { background: none; color: #aaa; font-size: 24px; cursor: pointer; padding: 0; }
+    .close-btn:hover { color: #333; background: none; }
+    
+    /* Hardware Config Section */
+    .config-box { background: #f8f9fa; padding: 15px; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 20px; }
+    .form-group { margin-bottom: 10px; }
+    .form-group label { display: block; font-size: 12px; font-weight: bold; color: #555; margin-bottom: 4px; }
+    
+    .badge-input-group { display: flex; gap: 10px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>User Directory</h2>
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="Enter username (e.g., jdoe)">
+    <button onclick="searchUser()">Search</button>
+  </div>
+
+  <div id="userProfile">
+    <h3 style="margin-top: 0;">User Information</h3>
+    <p><strong>Username:</strong> <span id="outUser"></span></p>
+    <p><strong>First Name:</strong> <span id="outFirst"></span></p>
+    <p><strong>Last Name:</strong> <span id="outLast"></span></p>
+    <div class="badge-row">
+      <div><strong>Current Badge ID:</strong> <span id="outBadge" style="font-family: monospace; font-size: 16px; color: #d35400;"></span></div>
+      <button class="btn-green" onclick="openModal()">+ Add New Badge</button>
+    </div>
+  </div>
+</div>
+
+<div id="badgeModal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Assign New Badge</h3>
+      <button class="close-btn" onclick="closeModal()">&times;</button>
+    </div>
+
+    <div class="config-box">
+      <h4 style="margin-top: 0; margin-bottom: 15px; color: #333;">Local Hardware Target</h4>
+      
+      <div class="form-group">
+        <label>HOSTNAME OR IP ADDRESS</label>
+        <input type="text" id="hwHost" value="10.1.0.1">
+      </div>
+      
+      <div class="form-group">
+        <label>CONNECTION PROTOCOL</label>
+        <select id="hwMode">
+          <option value="http">HTTP (Required if no trusted SSL cert)</option>
+          <option value="https">HTTPS</option>
+        </select>
+      </div>
+      <p style="font-size: 11px; color: #666; margin-top: 10px; margin-bottom: 0;">
+        Note: If the hardware requires a client certificate (mTLS), your browser will automatically prompt you to select one from your operating system.
+      </p>
+    </div>
+
+    <label style="font-size: 13px; color: #666; font-weight: bold;">NEW BADGE ID</label>
+    <div class="badge-input-group">
+      <input type="text" id="newBadgeId" placeholder="Waiting for scan..." readonly>
+      <button onclick="fetchFromHardware()" id="fetchBtn">Fetch</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  async function searchUser() {
+    const username = document.getElementById("searchInput").value.trim();
+    if (!username) return;
+    try {
+      const res = await fetch(`/api/users/${username}`);
+      const data = await res.json();
+      if (data.success) {
+        document.getElementById("outUser").innerText = data.user.username;
+        document.getElementById("outFirst").innerText = data.user.firstName;
+        document.getElementById("outLast").innerText = data.user.lastName;
+        document.getElementById("outBadge").innerText = data.user.badgeId;
+        document.getElementById("userProfile").style.display = "block";
+      } else {
+        alert(data.message);
+        document.getElementById("userProfile").style.display = "none";
+      }
+    } catch (err) { alert("Failed to connect to server."); }
+  }
+
+  function openModal() {
+    document.getElementById("badgeModal").style.display = "flex";
+    document.getElementById("newBadgeId").value = "";
+  }
+
+  function closeModal() {
+    document.getElementById("badgeModal").style.display = "none";
+  }
+
+  async function fetchFromHardware() {
+    const fetchBtn = document.getElementById("fetchBtn");
+    let host = document.getElementById("hwHost").value.trim();
+    const mode = document.getElementById("hwMode").value;
+
+    if (!host) return alert("Please enter a hardware hostname or IP.");
+    
+    // Strip trailing slashes or http:// if the user accidentally typed it
+    host = host.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    
+    // Construct the direct local URL
+    const hardwareUrl = `${mode}://${host}/api/credential`;
+
+    fetchBtn.disabled = true;
+    fetchBtn.innerText = "Scanning...";
+    document.getElementById("newBadgeId").value = "Please tap card on reader...";
+
+    try {
+      // Direct Client-Side Fetch!
+      const res = await fetch(hardwareUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "read", timeout: 5000 })
+      });
+
+      if (res.ok) {
+        if (res.status === 204) {
+          document.getElementById("newBadgeId").value = "Error: Card empty/invalid (204)";
+          fetchBtn.innerText = "Try Again";
+          return;
+        }
+
+        const hardwareData = await res.json();
+        const cardNumber = hardwareData?.data?.card?.apps?.[0]?.cardNumber;
+        
+        if (cardNumber) {
+          document.getElementById("newBadgeId").value = cardNumber;
+          fetchBtn.innerText = "✓ Success";
+        } else {
+          document.getElementById("newBadgeId").value = "Error: Invalid payload structure";
+          fetchBtn.innerText = "Try Again";
+        }
+      } else {
+        const errText = await res.text();
+        document.getElementById("newBadgeId").value = "";
+        alert(`Hardware Error (${res.status}): ` + errText);
+        fetchBtn.innerText = "Fetch";
+      }
+    } catch (err) {
+      document.getElementById("newBadgeId").value = "";
+      alert("Could not reach hardware!\n\nIf you are on an HTTPS website trying to reach an HTTP local IP, the browser blocked it due to Mixed Content rules. Please check the browser console.");
+      fetchBtn.innerText = "Fetch";
+    } finally {
+      setTimeout(() => {
+        fetchBtn.disabled = false;
+        if(fetchBtn.innerText === "✓ Success") fetchBtn.innerText = "Fetch";
+      }, 2000);
+    }
+  }
+</script>
+
+</body>
+</html>
