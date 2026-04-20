@@ -6,38 +6,44 @@
   <style>
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f7f6; padding: 40px; }
     .container { max-width: 600px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-    
-    /* Search Bar */
     .search-box { display: flex; gap: 10px; margin-bottom: 20px; }
-    input[type="text"] { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+    input[type="text"], input[type="password"], select, input[type="file"] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; box-sizing: border-box; }
     button { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; color: white; background: #007bff; }
     button:hover { background: #0056b3; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
     .btn-green { background: #28a745; }
     .btn-green:hover { background: #218838; }
     .btn-outline { background: white; color: #007bff; border: 1px solid #007bff; }
     .btn-outline:hover { background: #f8f9fa; }
-
-    /* User Profile */
+    
     #userProfile { display: none; padding: 20px; border: 1px solid #eee; border-radius: 6px; background: #fafafa; }
     .badge-row { display: flex; align-items: center; justify-content: space-between; margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd; }
     
-    /* Modal Popup */
-    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
-    .modal-content { background: white; padding: 30px; border-radius: 8px; width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+    /* Modal Styles */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; overflow-y: auto; }
+    .modal-content { background: white; padding: 30px; border-radius: 8px; width: 450px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); margin: 20px auto; }
     .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
     .modal-header h3 { margin: 0; }
-    .close-btn { background: none; color: #aaa; font-size: 20px; cursor: pointer; padding: 0; }
+    .close-btn { background: none; color: #aaa; font-size: 24px; cursor: pointer; padding: 0; }
     .close-btn:hover { color: #333; background: none; }
     
-    .badge-input-group { display: flex; gap: 10px; margin-top: 15px; }
-    #downloadSection { margin-top: 25px; padding: 15px; background: #fff3cd; border: 1px solid #ffeeba; border-radius: 4px; font-size: 13px; text-align: center; }
+    /* Hardware Config Section */
+    .config-box { background: #f8f9fa; padding: 15px; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 20px; }
+    .form-group { margin-bottom: 10px; }
+    .form-group label { display: block; font-size: 12px; font-weight: bold; color: #555; margin-bottom: 4px; }
+    
+    .cert-status { font-size: 12px; font-weight: bold; margin-top: 5px; }
+    .cert-ok { color: #28a745; }
+    .cert-missing { color: #dc3545; }
+    
+    #uploadSection { display: none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ccc; }
+    .badge-input-group { display: flex; gap: 10px; margin-top: 10px; }
   </style>
 </head>
 <body>
 
 <div class="container">
   <h2>User Directory</h2>
-  
   <div class="search-box">
     <input type="text" id="searchInput" placeholder="Enter username (e.g., jdoe)">
     <button onclick="searchUser()">Search</button>
@@ -48,7 +54,6 @@
     <p><strong>Username:</strong> <span id="outUser"></span></p>
     <p><strong>First Name:</strong> <span id="outFirst"></span></p>
     <p><strong>Last Name:</strong> <span id="outLast"></span></p>
-    
     <div class="badge-row">
       <div><strong>Current Badge ID:</strong> <span id="outBadge" style="font-family: monospace; font-size: 16px; color: #d35400;"></span></div>
       <button class="btn-green" onclick="openModal()">+ Add New Badge</button>
@@ -63,32 +68,50 @@
       <button class="close-btn" onclick="closeModal()">&times;</button>
     </div>
 
-    <label style="font-size: 13px; color: #666; font-weight: bold;">NEW BADGE ID</label>
-    <div class="badge-input-group">
-      <input type="text" id="newBadgeId" placeholder="Waiting for scan...">
-      <button onclick="fetchFromProxy()" id="fetchBtn">Fetch from Hardware</button>
+    <div class="config-box">
+      <h4 style="margin-top: 0; margin-bottom: 15px; color: #333;">Hardware Target</h4>
+      
+      <div class="form-group">
+        <label>HOSTNAME OR IP ADDRESS</label>
+        <input type="text" id="hwHost" value="amz.local" oninput="checkCertStatus()">
+      </div>
+      
+      <div class="form-group">
+        <label>CONNECTION MODE</label>
+        <select id="hwMode" onchange="checkCertStatus()">
+          <option value="http">HTTP (Unencrypted)</option>
+          <option value="https">HTTPS (Standard TLS)</option>
+          <option value="mtls">mTLS (Client Certificate Required)</option>
+        </select>
+      </div>
+
+      <div id="certStatusMsg" class="cert-status"></div>
+
+      <div id="uploadSection">
+        <label style="font-size: 12px; font-weight: bold; color: #555;">UPLOAD CERTIFICATE FOR THIS HOST (.p12)</label>
+        <input type="file" id="p12file" accept=".p12,.pfx" style="margin-top: 5px; margin-bottom: 10px;">
+        <input type="password" id="p12pass" placeholder="Certificate Passphrase (Optional)" style="margin-bottom: 10px;">
+        <button class="btn-outline" onclick="uploadCertificate()" style="width: 100%;" id="uploadBtn">Upload & Cache Certificate</button>
+      </div>
     </div>
 
-    <div id="downloadSection">
-      <p style="margin-top: 0; color: #856404;"><strong>Hardware Connector Required</strong><br>If you haven't already, please download and run the background connector to read physical cards.</p>
-      <a id="downloadLink" href="#" style="text-decoration: none;">
-        <button class="btn-outline" id="downloadBtn" style="width: 100%;">Download Connector</button>
-      </a>
+    <label style="font-size: 13px; color: #666; font-weight: bold;">NEW BADGE ID</label>
+    <div class="badge-input-group">
+      <input type="text" id="newBadgeId" placeholder="Waiting for scan..." readonly>
+      <button onclick="fetchFromHardware()" id="fetchBtn">Fetch</button>
     </div>
 
   </div>
 </div>
 
 <script>
-  // --- 1. User Search Logic ---
+  // --- User Search ---
   async function searchUser() {
     const username = document.getElementById("searchInput").value.trim();
     if (!username) return;
-
     try {
       const res = await fetch(`/api/users/${username}`);
       const data = await res.json();
-
       if (data.success) {
         document.getElementById("outUser").innerText = data.user.username;
         document.getElementById("outFirst").innerText = data.user.firstName;
@@ -99,79 +122,144 @@
         alert(data.message);
         document.getElementById("userProfile").style.display = "none";
       }
-    } catch (err) {
-      alert("Failed to connect to server.");
-    }
+    } catch (err) { alert("Failed to connect to server."); }
   }
 
-  // --- 2. Modal & OS Detection Logic ---
+  // --- Modal Logic ---
   function openModal() {
     document.getElementById("badgeModal").style.display = "flex";
-    document.getElementById("newBadgeId").value = ""; // clear previous
-    
-    // Detect OS to serve the correct download file
-    const userAgent = window.navigator.userAgent;
-    const downloadLink = document.getElementById("downloadLink");
-    const downloadBtn = document.getElementById("downloadBtn");
-
-    if (userAgent.indexOf("Mac") !== -1) {
-      downloadLink.href = "/downloads/HardwareConnector-Mac.zip";
-      downloadBtn.innerText = "Download for macOS";
-    } else {
-      downloadLink.href = "/downloads/hardware-connector-win.exe";
-      downloadBtn.innerText = "Download for Windows (.exe)";
-    }
+    document.getElementById("newBadgeId").value = "";
+    checkCertStatus(); // Run initial cert check when modal opens
   }
 
   function closeModal() {
     document.getElementById("badgeModal").style.display = "none";
   }
 
-  // --- 3. Hardware Proxy Fetch Logic ---
-  async function fetchFromProxy() {
+  // --- Dynamic Certificate Checking ---
+  async function checkCertStatus() {
+    const host = document.getElementById("hwHost").value.trim();
+    const mode = document.getElementById("hwMode").value;
+    const statusMsg = document.getElementById("certStatusMsg");
+    const uploadSec = document.getElementById("uploadSection");
     const fetchBtn = document.getElementById("fetchBtn");
+
+    // Reset visibility
+    uploadSec.style.display = "none";
+    statusMsg.innerText = "";
+    fetchBtn.disabled = false;
+
+    if (!host) return;
+
+    if (mode === "mtls") {
+      try {
+        const res = await fetch(`/check-cert/${encodeURIComponent(host)}`);
+        const data = await res.json();
+
+        if (data.cached || data.exists) {
+          statusMsg.className = "cert-status cert-ok";
+          statusMsg.innerText = "✓ Valid certificate found on server";
+        } else {
+          statusMsg.className = "cert-status cert-missing";
+          statusMsg.innerText = "⚠ No Cert found for this host";
+          uploadSec.style.display = "block"; // Show upload form
+          fetchBtn.disabled = true; // Prevent fetching until cert is uploaded
+        }
+      } catch (err) {
+        statusMsg.className = "cert-status cert-missing";
+        statusMsg.innerText = "Error checking cert status";
+      }
+    }
+  }
+
+  // --- Certificate Upload Logic ---
+  async function uploadCertificate() {
+    const host = document.getElementById("hwHost").value.trim();
+    const fileInput = document.getElementById("p12file");
+    const passInput = document.getElementById("p12pass");
+    const uploadBtn = document.getElementById("uploadBtn");
+
+    if (!fileInput.files[0]) return alert("Please select a .p12 file first.");
+    if (!host) return alert("Please enter a hostname.");
+
+    uploadBtn.disabled = true;
+    uploadBtn.innerText = "Uploading...";
+
+    const formData = new FormData();
+    formData.append("p12file", fileInput.files[0]);
+    formData.append("passphrase", passInput.value);
+    formData.append("hostname", host);
+
+    try {
+      const res = await fetch("/upload-cert", { method: "POST", body: formData });
+      const data = await res.json();
+
+      if (res.ok) {
+        alert("Certificate successfully cached on the server!");
+        fileInput.value = "";
+        passInput.value = "";
+        checkCertStatus(); // Re-run check to turn the text green and enable the fetch button
+      } else {
+        alert("Upload failed: " + data.error + (data.details ? `\n${data.details}` : ""));
+      }
+    } catch (err) {
+      alert("Network error during upload.");
+    } finally {
+      uploadBtn.disabled = false;
+      uploadBtn.innerText = "Upload & Cache Certificate";
+    }
+  }
+
+  // --- Hardware Fetch Logic ---
+  async function fetchFromHardware() {
+    const fetchBtn = document.getElementById("fetchBtn");
+    const host = document.getElementById("hwHost").value.trim();
+    const mode = document.getElementById("hwMode").value;
+
+    if (!host) return alert("Please enter a hardware hostname or IP.");
+
     fetchBtn.disabled = true;
     fetchBtn.innerText = "Scanning...";
     document.getElementById("newBadgeId").value = "Please tap card on reader...";
 
     try {
-      // Send request to the Local Proxy running on the user's machine
-      const res = await fetch("http://127.0.0.1:3030/api/credential", {
+      const res = await fetch("/api/credential", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          host: "amz.local", // The proxy will forward the request to this hardware IP
-          timeout: 5000, 
-          mode: "http" 
-        })
+        body: JSON.stringify({ host, timeout: 5000, mode })
       });
 
       const proxyResponse = await res.json();
 
       if (res.ok) {
-        // Parse the exact cardNumber field from the payload structure you provided
+        if (proxyResponse.status === 204) {
+          document.getElementById("newBadgeId").value = "Error: Card empty/invalid (204)";
+          fetchBtn.innerText = "Try Again";
+          return;
+        }
+
         const cardNumber = proxyResponse.data?.card?.apps?.[0]?.cardNumber;
         
         if (cardNumber) {
           document.getElementById("newBadgeId").value = cardNumber;
           fetchBtn.innerText = "✓ Success";
         } else {
-          document.getElementById("newBadgeId").value = "Error: Card empty/invalid";
+          document.getElementById("newBadgeId").value = "Error: Invalid payload structure";
           fetchBtn.innerText = "Try Again";
         }
       } else {
         document.getElementById("newBadgeId").value = "";
-        alert("Reader Error: " + (proxyResponse.error || "Unknown error"));
-        fetchBtn.innerText = "Fetch from Hardware";
+        alert("Hardware Error: " + (proxyResponse.error || "Unknown error"));
+        fetchBtn.innerText = "Fetch";
       }
     } catch (err) {
       document.getElementById("newBadgeId").value = "";
-      alert("Could not reach local connector! Is the app running in the background?");
-      fetchBtn.innerText = "Fetch from Hardware";
+      alert("Could not reach the server API. Is the server running?");
+      fetchBtn.innerText = "Fetch";
     } finally {
       setTimeout(() => {
         fetchBtn.disabled = false;
-        if(fetchBtn.innerText === "✓ Success") fetchBtn.innerText = "Fetch from Hardware";
+        if(fetchBtn.innerText === "✓ Success") fetchBtn.innerText = "Fetch";
       }, 2000);
     }
   }
